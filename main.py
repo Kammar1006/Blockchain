@@ -8,6 +8,7 @@ class Blockchain:
         self.chain = []
         self.transactions = []
         self.create_block(proof=1, previous_hash='0')  # Tworzenie bloku genezy
+        self.reward = 50  # Nagroda za blok (np. 50 jednostek kryptowaluty)
 
     def create_block(self, proof, previous_hash):
         block = {
@@ -49,6 +50,13 @@ class Blockchain:
             previous_block = block
         return True
 
+    def add_transaction(self, sender, receiver, amount):
+        self.transactions.append({
+            'sender': sender,
+            'receiver': receiver,
+            'amount': amount
+        })
+
 app = Flask(__name__)
 blockchain = Blockchain()
 
@@ -57,6 +65,11 @@ def mine_block():
     previous_block = blockchain.get_previous_block()
     proof = blockchain.proof_of_work(previous_block['proof'])
     previous_hash = blockchain.hash(previous_block)
+    
+    # Dodajemy nagrodę za blok (nagroda za mining)
+    blockchain.add_transaction(sender="0", receiver="miner_address", amount=blockchain.reward)
+    
+    # Tworzymy nowy blok
     block = blockchain.create_block(proof, previous_hash)
     return block
 
@@ -64,6 +77,22 @@ def mine_block():
 def get_chain():
     response = {'chain': blockchain.chain, 'length': len(blockchain.chain)}
     return response
+
+@app.route('/transaction', methods=['GET'])
+def add_transaction():
+    #values = request.get_json()
+
+    #print(request)
+    
+    # Weryfikujemy dane transakcji
+    #required_fields = ['sender', 'receiver', 'amount']
+    #if not all(field in values for field in required_fields):
+    #    return 'Brak wymaganych pól', 400
+
+    # Dodajemy transakcję do listy
+    blockchain.add_transaction("a", "b", 10)
+    
+    return f'Transakcja dodana do bloku', 201
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
