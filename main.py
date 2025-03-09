@@ -9,6 +9,7 @@ class Blockchain:
         self.transactions = []
         self.reward = 50  # Początkowa nagroda za blok
         self.difficulty = 2  # Trudność (ilość zer na początku hasha)
+        self.mining_in_progress = False
         self.create_block(proof=1, previous_hash='0')
 
     def create_block(self, proof, previous_hash):
@@ -72,6 +73,11 @@ blockchain = Blockchain()
 @app.route('/mine', methods=['GET'])
 def mine_block():
 
+    if blockchain.mining_in_progress:
+        return "Mining in progress...."
+    
+    blockchain.mining_in_progress = True
+
     previous_block = blockchain.get_previous_block()
     proof = blockchain.proof_of_work(previous_block['proof'])
     previous_hash = blockchain.hash(previous_block)
@@ -80,6 +86,9 @@ def mine_block():
     blockchain.add_transaction(sender="0", receiver="miner_address", amount=blockchain.reward)
     
     block = blockchain.create_block(proof, previous_hash)
+
+    blockchain.mining_in_progress = False
+
     return block
 
 @app.route('/chain', methods=['GET'])
