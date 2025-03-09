@@ -7,8 +7,9 @@ class Blockchain:
     def __init__(self):
         self.chain = []
         self.transactions = []
-        self.create_block(proof=1, previous_hash='0')  # Tworzenie bloku genezy
-        self.reward = 50  # Nagroda za blok (np. 50 jednostek kryptowaluty)
+        self.reward = 50  # Początkowa nagroda za blok
+        self.difficulty = 2  # Trudność (ilość zer na początku hasha)
+        self.create_block(proof=1, previous_hash='0')
 
     def create_block(self, proof, previous_hash):
         block = {
@@ -18,8 +19,10 @@ class Blockchain:
             'proof': proof,
             'previous_hash': previous_hash
         }
-        self.transactions = []  # Resetowanie transakcji po dodaniu bloku
+        self.transactions = []
         self.chain.append(block)
+        if(len(self.chain) > 20*self.difficulty and self.difficulty < 7):
+            self.difficulty += 1
         return block
 
     def get_previous_block(self):
@@ -27,14 +30,20 @@ class Blockchain:
 
     def proof_of_work(self, previous_proof):
         new_proof = 1
+        start_time = time.time()
+        
         while not self.is_valid_proof(previous_proof, new_proof):
             new_proof += 1
+        
+        mining_time = round(time.time() - start_time, 2)
+        print(f"Blok wykopany w {mining_time} sekund. Proof: {new_proof}")
+        
         return new_proof
 
     def is_valid_proof(self, previous_proof, new_proof):
         guess = f'{previous_proof}{new_proof}'.encode()
         guess_hash = hashlib.sha256(guess).hexdigest()
-        return guess_hash[:4] == '0000'  # Warunek proof-of-work
+        return guess_hash[:self.difficulty] == '0' * self.difficulty
 
     def hash(self, block):
         encoded_block = json.dumps(block, sort_keys=True).encode()
@@ -62,37 +71,34 @@ blockchain = Blockchain()
 
 @app.route('/mine', methods=['GET'])
 def mine_block():
+
     previous_block = blockchain.get_previous_block()
     proof = blockchain.proof_of_work(previous_block['proof'])
     previous_hash = blockchain.hash(previous_block)
     
-    # Dodajemy nagrodę za blok (nagroda za mining)
+    # Nagroda dla górnika
     blockchain.add_transaction(sender="0", receiver="miner_address", amount=blockchain.reward)
     
-    # Tworzymy nowy blok
     block = blockchain.create_block(proof, previous_hash)
     return block
 
 @app.route('/chain', methods=['GET'])
 def get_chain():
-    response = {'chain': blockchain.chain, 'length': len(blockchain.chain)}
+    response = {'length': len(blockchain.chain), 'dif': blockchain.difficulty, 'chain': blockchain.chain}
     return response
 
-@app.route('/transaction', methods=['GET'])
+'''
+@app.route('/transaction', methods=['POST'])
 def add_transaction():
-    #values = request.get_json()
+    values = request.get_json()
+    required_fields = ['sender', 'receiver', 'amount']
+    if not all(field in values for field in required_fields):
+        return 'Brak wymaganych pól', 400
 
-    #print(request)
-    
-    # Weryfikujemy dane transakcji
-    #required_fields = ['sender', 'receiver', 'amount']
-    #if not all(field in values for field in required_fields):
-    #    return 'Brak wymaganych pól', 400
-
-    # Dodajemy transakcję do listy
-    blockchain.add_transaction("a", "b", 10)
-    
+    blockchain.add_transaction(values['sender'], values['receiver'], values['amount'])
     return f'Transakcja dodana do bloku', 201
+'''
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
