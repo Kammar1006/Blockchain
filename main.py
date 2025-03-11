@@ -42,7 +42,9 @@ class Blockchain:
         new_proof = 1
         start_time = time.time()
         
-        while not self.is_valid_proof(previous_proof, new_proof):
+        while True:
+            if self.is_valid_proof(previous_proof, new_proof):
+                break
             new_proof += 1
         
         mining_time = round(time.time() - start_time, 2)
@@ -128,7 +130,7 @@ def mine_block():
 
     previous_block = blockchain.get_previous_block()
     proof = blockchain.proof_of_work(previous_block['proof'])
-    previous_hash = blockchain.hash(previous_block)
+    previous_hash = previous_block['hash']
     
     # Nagroda dla górnika
     blockchain.add_transaction(sender="0", receiver="miner_address", amount=blockchain.reward)
