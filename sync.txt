@@ -1,0 +1,2 @@
+paste this in cmd when start 2nd instance in port 5001 to sync with port 5000 
+curl -X POST http://127.0.0.1:5000/register_node -H "Content-Type: application/json" -d "{\"nodes\":[\"127.0.0.1:5001\"]}"

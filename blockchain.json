@@ -76,5 +76,19 @@
         "proof": 452,
         "previous_hash": "921d4569e00d58a8c0f51438215927ddf36165c562f0a55871859bbf523052a9",
         "hash": "f811c11288b2c8e7d36c982dc10da3f215d51d8a8d33fd9e9403a2ee4a369cdf"
+    },
+    {
+        "index": 7,
+        "timestamp": 1741715277.74702,
+        "transactions": [
+            {
+                "sender": "0",
+                "receiver": "miner_address",
+                "amount": 50
+            }
+        ],
+        "proof": 59,
+        "previous_hash": "f811c11288b2c8e7d36c982dc10da3f215d51d8a8d33fd9e9403a2ee4a369cdf",
+        "hash": "964566917092866664f801a12c6b78e8e9391abfa54cacf28c908d0489620da5"
     }
 ]
