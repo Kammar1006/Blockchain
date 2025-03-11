@@ -2,6 +2,8 @@ import hashlib
 import time
 import json
 from flask import Flask, request
+import os
+import atexit
 
 class Blockchain:
     def __init__(self):
@@ -11,6 +13,9 @@ class Blockchain:
         self.difficulty = 2  # Trudność (ilość zer na początku hasha)
         self.mining_in_progress = False
         self.create_block(proof=1, previous_hash='0')
+        self.load_blockchain()
+        self.nodes = set()  # Zbiór adresów innych węzłów
+
 
     def create_block(self, proof, previous_hash):
         block = {
@@ -67,6 +72,15 @@ class Blockchain:
             'amount': amount
         })
 
+    def save_blockchain(self):
+        with open("blockchain.json", "w") as file:
+            json.dump(self.chain, file, indent=4)
+    
+    def load_blockchain(self):
+        if os.path.exists("blockchain.json"):
+            with open("blockchain.json", "r") as file:
+                self.chain = json.load(file)
+
 app = Flask(__name__)
 blockchain = Blockchain()
 
@@ -74,7 +88,7 @@ blockchain = Blockchain()
 def mine_block():
 
     if blockchain.mining_in_progress:
-        return "Mining in progress...."
+        return "Mining in progress....", 400
     
     blockchain.mining_in_progress = True
 
@@ -96,6 +110,18 @@ def get_chain():
     response = {'length': len(blockchain.chain), 'dif': blockchain.difficulty, 'chain': blockchain.chain}
     return response
 
+@app.route('/register_node', methods=['POST'])
+def register_node():
+    values = request.get_json()
+    nodes = values.get("nodes")
+    if nodes is None:
+        return "Brak nodów do zarejestrowania", 400
+    
+    for node in nodes:
+        blockchain.nodes.add(node)
+
+    return {"message": "Węzły zarejestrowane", "nodes": list(blockchain.nodes)}, 201
+
 '''
 @app.route('/transaction', methods=['POST'])
 def add_transaction():
@@ -108,6 +134,7 @@ def add_transaction():
     return f'Transakcja dodana do bloku', 201
 '''
 
+atexit.register(blockchain.save_blockchain)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
