@@ -5,6 +5,7 @@ from flask import Flask, request
 import os, sys
 import atexit
 import requests
+import copy
 
 class Blockchain:
     def __init__(self, node_address):
@@ -42,10 +43,16 @@ class Blockchain:
         proof = 0  # Startujemy od 0, zamiast 1
         
         while True:
+            copy_list = copy.deepcopy(self.transactions)
+            copy_list.append({
+                'sender': "*",
+                'receiver': self.node_address,
+                'amount': self.reward
+            })
             block = {
                 'index': previous_block['index'] + 1,
                 'timestamp': time.time(),
-                'transactions': self.transactions[:],
+                'transactions': copy_list,
                 'proof': proof,
                 'previous_hash': previous_hash
             }
@@ -227,7 +234,7 @@ def new_block():
         blockchain.save_blockchain()
 
         # Po dodaniu nowego bloku, informujemy inne nody o tym, że blok został zaakceptowany
-        blockchain.announce_new_block(block)
+        # blockchain.announce_new_block(block)
 
         return {"message": "Block accepted"}, 201
     else:
