@@ -7,15 +7,22 @@ import atexit
 import requests
 
 class Blockchain:
-    def __init__(self):
+    def __init__(self, node_address):
         self.chain = []
         self.transactions = []
-        self.reward = 50  # Początkowa nagroda za blok
-        self.difficulty = 2  # Trudność (ilość zer na początku hasha)
+        self.reward = 50
+        self.difficulty = 2
         self.mining_in_progress = False
+        self.nodes = set()
+        self.node_address = node_address
+        
         self.create_block(proof=1, previous_hash='0')
         self.load_blockchain()
-        self.nodes = set()  # Zbiór adresów innych węzłów
+
+        self.nodes.add(self.node_address)
+        
+        if node_address != "127.0.0.1:5000":
+            self.register_with_main_node()
 
 
     def create_block(self, proof, previous_hash):
@@ -92,6 +99,8 @@ class Blockchain:
         max_length = len(self.chain)
 
         for node in self.nodes:
+            if node == self.node_address:
+                continue
             try:
                 response = requests.get(f"http://{node}/chain")
                 if response.status_code == 200:
@@ -109,16 +118,46 @@ class Blockchain:
             return True
         return False
 
-    def announce_new_block(self, block):
-        """Wysyła nowy blok do wszystkich znanych węzłów."""
+    def announce_updated_chain(self):
         for node in self.nodes:
+            if node == self.node_address:
+                continue
+            try:
+                requests.get(f"http://{node}/sync")
+            except:
+                continue 
+
+    def announce_new_block(self, block):
+        for node in self.nodes:
+            if node == self.node_address:
+                continue
             try:
                 requests.post(f"http://{node}/new_block", json=block)
             except:
-                continue  # Jeśli jakiś węzeł nie odpowiada, ignorujemy
+                continue  # Ignorujemy błędy
+
+    def announce_new_node(self, new_nodes):
+        for node in self.nodes:
+            for new_node in new_nodes:
+                if node == self.node_address:
+                    continue
+                try:
+                    requests.post(f"http://{node}/register_node", json={"nodes": [new_node]})
+                    
+                except:
+                    continue
+
+    def register_with_main_node(self):
+        try:
+            response = requests.post(f"http://127.0.0.1:5000/register_node", json={"nodes": [self.node_address]})
+            if response.status_code == 201:
+                nodes = response.json().get("nodes", [])
+                self.nodes.update(nodes)
+                print(f"Zarejestrowano w sieci! Aktualne nody: {self.nodes}")
+        except:
+            print("Błąd rejestracji w bazowym nodzie.")
 
 app = Flask(__name__)
-blockchain = Blockchain()
 
 @app.route('/mine', methods=['GET'])
 def mine_block():
@@ -153,41 +192,53 @@ def register_node():
     values = request.get_json()
     nodes = values.get("nodes")
     if nodes is None:
-        return "Brak nodów do zarejestrowania", 400
-    
+        return "No node to register", 400
+
     for node in nodes:
         blockchain.nodes.add(node)
 
-    return {"message": "Węzły zarejestrowane", "nodes": list(blockchain.nodes)}, 201
+    # Informujemy inne nody o nowym węźle
+    blockchain.announce_new_node(nodes)
+
+    return {
+        "message": "Node registered",
+        "nodes": list(blockchain.nodes)
+    }, 201
 
 @app.route('/sync', methods=['GET'])
 def sync():
     replaced = blockchain.replace_chain()
     if replaced:
-        return {"message": "Blockchain zaktualizowany!"}
-    return {"message": "Blockchain jest już aktualny"}
+        return {"message": "Blockchain update!"}
+    return {"message": "Blockchain is already updated"}
 
 @app.route('/new_block', methods=['POST'])
 def new_block():
     values = request.get_json()
     if values is None:
-        return "Brak danych", 400
+        return "Invalid data", 400
 
     block = values
     previous_block = blockchain.get_previous_block()
 
-    # Sprawdzamy poprawność łańcucha
     if previous_block["index"] + 1 == block["index"] and \
        previous_block["hash"] == block["previous_hash"] and \
        blockchain.is_valid_proof(previous_block["proof"], block["proof"]):
 
         blockchain.chain.append(block)
-        blockchain.save_blockchain()  # Zapisz nowy stan blockchaina
+        blockchain.save_blockchain()
 
-        return {"message": "Blok zaakceptowany"}, 201
+        # Po dodaniu nowego bloku, informujemy inne nody
+        blockchain.announce_new_block(block)
+
+        return {"message": "Block accepted"}, 201
     else:
-        return {"message": "Odrzucono blok"}, 400
+        return {"message": "Block refused"}, 400
 
+@app.route('/nodes', methods=['GET'])
+def get_nodes():
+    """Zwraca listę podłączonych nodów"""
+    return {"nodes": list(blockchain.nodes)}, 200
 
 '''
 @app.route('/transaction', methods=['POST'])
@@ -201,9 +252,12 @@ def add_transaction():
     return f'Transakcja dodana do bloku', 201
 '''
 
-atexit.register(blockchain.save_blockchain)
-
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         port = int(sys.argv[1])  # Można podać port jako argument
-    app.run(host='0.0.0.0', port=port)
+
+    blockchain = Blockchain(f"127.0.0.1:{port}")
+    app.run(host='127.0.0.1', port=port)
+
+
+atexit.register(blockchain.save_blockchain)
