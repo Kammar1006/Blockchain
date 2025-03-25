@@ -16,53 +16,49 @@ class Blockchain:
         self.nodes = set()
         self.node_address = node_address
         
-        self.create_block(proof=1, previous_hash='0')
         self.load_blockchain()
+        if not self.chain:
+            genesis_block = self.proof_of_work()
+            self.create_block(genesis_block)
 
         self.nodes.add(self.node_address)
         
         if node_address != "127.0.0.1:5000":
             self.register_with_main_node()
 
-
-    def create_block(self, proof, previous_hash):
-        block = {
-            'index': len(self.chain) + 1,
-            'timestamp': time.time(),
-            'transactions': self.transactions,
-            'proof': proof,
-            'previous_hash': previous_hash
-        }
-
-        block['hash'] = self.hash(block)  # 📌 Dodaj hash do bloku!
-
-        self.transactions = []
+    
+    def create_block(self, block):
         self.chain.append(block)
-        if(len(self.chain) > 20*self.difficulty and self.difficulty < 7):
-            self.difficulty += 1
+        self.transactions = []
+        self.save_blockchain()
         return block
 
     def get_previous_block(self):
         return self.chain[-1]
 
-    def proof_of_work(self, previous_proof):
-        new_proof = 1
-        start_time = time.time()
+    def proof_of_work(self):
+        previous_block = self.get_previous_block()
+        previous_hash = previous_block["hash"]
+        proof = 0  # Startujemy od 0, zamiast 1
         
         while True:
-            if self.is_valid_proof(previous_proof, new_proof):
+            block = {
+                'index': previous_block['index'] + 1,
+                'timestamp': time.time(),
+                'transactions': self.transactions[:],
+                'proof': proof,
+                'previous_hash': previous_hash
+            }
+            block['hash'] = self.hash(block)
+            
+            if block['hash'][:self.difficulty] == '0' * self.difficulty:
                 break
-            new_proof += 1
-        
-        mining_time = round(time.time() - start_time, 2)
-        print(f"Blok wykopany w {mining_time} sekund. Proof: {new_proof}")
-        
-        return new_proof
 
-    def is_valid_proof(self, previous_proof, new_proof):
-        guess = f'{previous_proof}{new_proof}'.encode()
-        guess_hash = hashlib.sha256(guess).hexdigest()
-        return guess_hash[:self.difficulty] == '0' * self.difficulty
+            proof += 1
+        
+        print(f"Blok wykopany! Proof: {proof}, Hash: {block['hash']}")
+        return block
+
 
     def hash(self, block):
         encoded_block = json.dumps(block, sort_keys=True).encode()
@@ -70,12 +66,18 @@ class Blockchain:
 
     def is_chain_valid(self, chain):
         previous_block = chain[0]
+        
         for block in chain[1:]:
-            if block['previous_hash'] != self.hash(previous_block):
+            # Sprawdzamy, czy previous_hash zgadza się z hashem poprzedniego bloku
+            if block['previous_hash'] != previous_block['hash']:
                 return False
-            if not self.is_valid_proof(previous_block['proof'], block['proof']):
+            
+            # Sprawdzamy, czy hash bloku spełnia warunek trudności
+            if block['hash'][:self.difficulty] != '0' * self.difficulty:
                 return False
-            previous_block = block
+
+            previous_block = block  # Przechodzimy do następnego bloku
+        
         return True
 
     def add_transaction(self, sender, receiver, amount):
@@ -161,23 +163,20 @@ app = Flask(__name__)
 
 @app.route('/mine', methods=['GET'])
 def mine_block():
-
     if blockchain.mining_in_progress:
         return "Mining in progress....", 400
-    
-    blockchain.mining_in_progress = True
 
-    previous_block = blockchain.get_previous_block()
-    proof = blockchain.proof_of_work(previous_block['proof'])
-    previous_hash = previous_block['hash']
+    blockchain.mining_in_progress = True
     
-    # Nagroda dla górnika
-    blockchain.add_transaction(sender="0", receiver="miner_address", amount=blockchain.reward)
-    
-    block = blockchain.create_block(proof, previous_hash)
+    # Kopanie bloku
+    block = blockchain.proof_of_work()
+
+    # Dodajemy blok do łańcucha
+    blockchain.create_block(block)
 
     blockchain.mining_in_progress = False
 
+    # Ogłaszamy nowy blok
     blockchain.announce_new_block(block)
 
     return block
@@ -221,14 +220,13 @@ def new_block():
     block = values
     previous_block = blockchain.get_previous_block()
 
-    if previous_block["index"] + 1 == block["index"] and \
-       previous_block["hash"] == block["previous_hash"] and \
-       blockchain.is_valid_proof(previous_block["proof"], block["proof"]):
-
+    # Sprawdzamy, czy blok ma prawidłowy poprzedni hash
+    if previous_block["hash"] == block["previous_hash"]:
+        # Jeśli blok jest poprawny, dodajemy go do łańcucha
         blockchain.chain.append(block)
         blockchain.save_blockchain()
 
-        # Po dodaniu nowego bloku, informujemy inne nody
+        # Po dodaniu nowego bloku, informujemy inne nody o tym, że blok został zaakceptowany
         blockchain.announce_new_block(block)
 
         return {"message": "Block accepted"}, 201
