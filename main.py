@@ -225,9 +225,21 @@ def new_block():
         return "Invalid data", 400
 
     block = values
+    #print(block["previous_hash"])
     previous_block = blockchain.get_previous_block()
+    #print(previous_block["hash"])
 
     # Sprawdzamy, czy blok ma prawidłowy poprzedni hash
+
+    block_copy = block.copy()
+    block_copy.pop("hash", None)  # Usuwamy hash przed obliczeniem
+
+    if block['hash'] != blockchain.hash(block_copy):
+        return {"message": "Hash nieprawidłowy"}, 400
+
+    if block['hash'][:blockchain.difficulty] != '0' * blockchain.difficulty:
+        return {"message": "Blok nie spełnia trudności"}, 400
+
     if previous_block["hash"] == block["previous_hash"]:
         # Jeśli blok jest poprawny, dodajemy go do łańcucha
         blockchain.chain.append(block)
