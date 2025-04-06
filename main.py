@@ -159,6 +159,7 @@ class Blockchain:
     def register_with_main_node(self):
         try:
             response = requests.post(f"http://127.0.0.1:5000/register_node", json={"nodes": [self.node_address]})
+            print("try?")
             if response.status_code == 201:
                 nodes = response.json().get("nodes", [])
                 self.nodes.update(nodes)
@@ -197,18 +198,26 @@ def get_chain():
 def register_node():
     values = request.get_json()
     nodes = values.get("nodes")
-    if nodes is None:
+
+    if nodes is None or not isinstance(nodes, list):
         return "No node to register", 400
 
-    for node in nodes:
-        blockchain.nodes.add(node)
+    # Śledzimy, czy dodano coś nowego
+    added_nodes = set()
 
-    # Informujemy inne nody o nowym węźle
-    blockchain.announce_new_node(nodes)
+    for node in nodes:
+        if node != blockchain.node_address and node not in blockchain.nodes:
+            blockchain.nodes.add(node)
+            added_nodes.add(node)
+
+    # Ogłaszamy tylko NOWE nody
+    if added_nodes:
+        blockchain.announce_new_node(added_nodes)
 
     return {
-        "message": "Node registered",
-        "nodes": list(blockchain.nodes)
+        "message": "Node(s) registered",
+        "added": list(added_nodes),
+        "all_nodes": list(blockchain.nodes)
     }, 201
 
 @app.route('/sync', methods=['GET'])
@@ -225,9 +234,21 @@ def new_block():
         return "Invalid data", 400
 
     block = values
+    #print(block["previous_hash"])
     previous_block = blockchain.get_previous_block()
+    #print(previous_block["hash"])
 
     # Sprawdzamy, czy blok ma prawidłowy poprzedni hash
+
+    block_copy = block.copy()
+    block_copy.pop("hash", None)  # Usuwamy hash przed obliczeniem
+
+    if block['hash'] != blockchain.hash(block_copy):
+        return {"message": "Hash nieprawidłowy"}, 400
+
+    if block['hash'][:blockchain.difficulty] != '0' * blockchain.difficulty:
+        return {"message": "Blok nie spełnia trudności"}, 400
+
     if previous_block["hash"] == block["previous_hash"]:
         # Jeśli blok jest poprawny, dodajemy go do łańcucha
         blockchain.chain.append(block)
