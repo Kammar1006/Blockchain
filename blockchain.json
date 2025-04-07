@@ -837,5 +837,45 @@
         "proof": 669,
         "previous_hash": "00174e41fc378bfdf62de25090ca4f66c2c1565d428c7ac8f6ffc71c5d90b856",
         "hash": "00631e60d0689fc51b8d7f5ec839f1fc65f448ed36e9ead8534a3ef257ee820b"
+    },
+    {
+        "index": 62,
+        "timestamp": 1744045221.9881139,
+        "transactions": [
+            {
+                "sender": "a",
+                "receiver": "b",
+                "amount": 10,
+                "timestamp": 1744045199.9505906
+            },
+            {
+                "sender": "a",
+                "receiver": "b",
+                "amount": 10,
+                "timestamp": 1744045212.3508258
+            },
+            {
+                "sender": "*",
+                "receiver": "127.0.0.1:5002",
+                "amount": 50
+            }
+        ],
+        "proof": 259,
+        "previous_hash": "00631e60d0689fc51b8d7f5ec839f1fc65f448ed36e9ead8534a3ef257ee820b",
+        "hash": "00318b77b4ce767a3fc0edefec6031769a1b66745625106b0880898d1df8b262"
+    },
+    {
+        "index": 63,
+        "timestamp": 1744053297.445632,
+        "transactions": [
+            {
+                "sender": "*",
+                "receiver": "127.0.0.1:5000",
+                "amount": 50
+            }
+        ],
+        "proof": 340,
+        "previous_hash": "00318b77b4ce767a3fc0edefec6031769a1b66745625106b0880898d1df8b262",
+        "hash": "00e71b54074ab547c3e2ae9ccd11027ffe6390f8f323865f572e7e9f6369bc96"
     }
 ]

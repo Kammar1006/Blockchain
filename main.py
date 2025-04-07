@@ -6,6 +6,8 @@ import os, sys
 import atexit
 import requests
 import copy
+import threading
+
 
 class Blockchain:
     def __init__(self, node_address):
@@ -179,11 +181,21 @@ class Blockchain:
             response = requests.post(f"http://127.0.0.1:5000/register_node", json={"nodes": [self.node_address]})
             print("try?")
             if response.status_code == 201:
-                nodes = response.json().get("nodes", [])
+                nodes = response.json().get("all_nodes", [])
                 self.nodes.update(nodes)
                 print(f"Zarejestrowano w sieci! Aktualne nody: {self.nodes}")
         except:
             print("Błąd rejestracji w bazowym nodzie.")
+
+    def get_balance(self, node_id):
+        balance = 0
+        for block in self.chain:
+            for tx in block["transactions"]:
+                if tx["receiver"] == node_id:
+                    balance += tx["amount"]
+                elif tx["sender"] == node_id:
+                    balance -= tx["amount"]
+        return balance
 
 app = Flask(__name__)
 
@@ -313,12 +325,71 @@ def add_transaction():
 
     return f'Transakcja dodana do bloku', 201
 
+node_id = "test"
+
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         port = int(sys.argv[1])  # Można podać port jako argument
 
+        if len(sys.argv) > 2:
+            node_id = sys.argv[2]
+
+
+
     blockchain = Blockchain(f"127.0.0.1:{port}")
-    app.run(host='127.0.0.1', port=port)
+    blockchain.node_id = node_id  # zapisz identyfikator w obiekcie
+
+    # 🔁 Uruchom Flask w osobnym wątku
+    flask_thread = threading.Thread(target=lambda: app.run(host='127.0.0.1', port=port))
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    while True:
+        print(f"\nWitaj node: {node_id}")
+        print("1. Wyślij transakcję")
+        print("2. Sprawdź saldo")
+        print("3. Rozpocznij kopanie")
+        print("4. Pokaż blockchain")
+        print("5. Lista nodów")
+        print("0. Wyjdź")
+
+        choice = input(">>> ")
+
+        if choice == "1":
+            receiver = input("Odbiorca (node_id): ")
+            try:
+                amount = float(input("Kwota: "))
+            except ValueError:
+                print("❗ Nieprawidłowa kwota.")
+                continue
+            balance = blockchain.get_balance(node_id)
+            if amount > balance:
+                print(f"❌ Brak środków. Twój balans: {balance}")
+            else:
+                blockchain.add_transaction(node_id, receiver, amount)
+                print("✅ Transakcja dodana")
+        elif choice == "2":
+            balance = blockchain.get_balance(node_id)
+            print(f"💰 Twój balans: {balance} coins")
+        elif choice == "3":
+            print("⛏️  Kopanie bloku...")
+            mined_block = blockchain.proof_of_work()
+            blockchain.create_block(mined_block)
+            blockchain.announce_new_block(mined_block)
+            print(f"✅ Wykopano blok #{mined_block['index']}")
+        elif choice == "4":
+            for block in blockchain.chain:
+                print(json.dumps(block, indent=4))
+        elif choice == "5":
+            print("🌐 Lista nodów:")
+            for node in blockchain.nodes:
+                print(f" - {node}")
+        elif choice == "0":
+            print("👋 Zamykanie node'a...")
+            break
+
+        else:
+            print("❗ Nieznana opcja. Spróbuj ponownie.")
 
 
 atexit.register(blockchain.save_blockchain)
