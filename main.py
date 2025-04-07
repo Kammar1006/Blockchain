@@ -345,7 +345,7 @@ if __name__ == '__main__':
     flask_thread.start()
 
     while True:
-        print(f"\nWitaj node: {node_id}")
+        print(f"\nWitaj node: {blockchain.node_address}")
         print("1. Wyślij transakcję")
         print("2. Sprawdź saldo")
         print("3. Rozpocznij kopanie")
@@ -362,14 +362,24 @@ if __name__ == '__main__':
             except ValueError:
                 print("❗ Nieprawidłowa kwota.")
                 continue
-            balance = blockchain.get_balance(node_id)
+            balance = blockchain.get_balance(blockchain.node_address)
             if amount > balance:
                 print(f"❌ Brak środków. Twój balans: {balance}")
             else:
-                blockchain.add_transaction(node_id, receiver, amount)
+                added = blockchain.add_transaction(blockchain.node_address, receiver, amount)
                 print("✅ Transakcja dodana")
+
+                # Rozgłaszamy tylko NOWĄ transakcję
+                for node in blockchain.nodes:
+                    print(node, blockchain.nodes)
+                    if node != blockchain.node_address:
+                        try:
+                            requests.post(f"http://{node}/transaction", json=blockchain.transactions[-1])
+                        except:
+                            continue
+
         elif choice == "2":
-            balance = blockchain.get_balance(node_id)
+            balance = blockchain.get_balance(blockchain.node_address)
             print(f"💰 Twój balans: {balance} coins")
         elif choice == "3":
             print("⛏️  Kopanie bloku...")

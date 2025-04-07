@@ -877,5 +877,25 @@
         "proof": 340,
         "previous_hash": "00318b77b4ce767a3fc0edefec6031769a1b66745625106b0880898d1df8b262",
         "hash": "00e71b54074ab547c3e2ae9ccd11027ffe6390f8f323865f572e7e9f6369bc96"
+    },
+    {
+        "index": 64,
+        "timestamp": 1744054057.762557,
+        "transactions": [
+            {
+                "sender": "127.0.0.1:5002",
+                "receiver": "127.0.0.1:5000",
+                "amount": 10.0,
+                "timestamp": 1744054015.0006418
+            },
+            {
+                "sender": "*",
+                "receiver": "127.0.0.1:5002",
+                "amount": 50
+            }
+        ],
+        "proof": 132,
+        "previous_hash": "00e71b54074ab547c3e2ae9ccd11027ffe6390f8f323865f572e7e9f6369bc96",
+        "hash": "0079fab9913b4411f5b8cafce51fa5a33b00e9e90dcb3e67f8528d52915a8515"
     }
 ]
