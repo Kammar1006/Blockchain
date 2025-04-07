@@ -16,6 +16,7 @@ class Blockchain:
         self.mining_in_progress = False
         self.nodes = set()
         self.node_address = node_address
+        self.known_transaction_hashes = set()
         
         self.load_blockchain()
         if not self.chain:
@@ -86,13 +87,30 @@ class Blockchain:
             previous_block = block  # Przechodzimy do następnego bloku
         
         return True
+    
+    def transaction_hash(self, tx):
+        tx_copy = tx.copy()
+        return hashlib.sha256(json.dumps(tx_copy, sort_keys=True).encode()).hexdigest()
 
-    def add_transaction(self, sender, receiver, amount):
-        self.transactions.append({
+    def add_transaction(self, sender, receiver, amount, timestamp=None):
+        if timestamp is None:
+            timestamp = time.time()
+
+        tx = {
             'sender': sender,
             'receiver': receiver,
-            'amount': amount
-        })
+            'amount': amount,
+            'timestamp': timestamp
+        }
+
+        tx_hash = self.transaction_hash(tx)
+
+        if tx_hash in self.known_transaction_hashes:
+            return False  # Już dodana
+
+        self.known_transaction_hashes.add(tx_hash)
+        self.transactions.append(tx)
+        return True
 
     def save_blockchain(self):
         with open("blockchain.json", "w") as file:
@@ -266,17 +284,34 @@ def get_nodes():
     """Zwraca listę podłączonych nodów"""
     return {"nodes": list(blockchain.nodes)}, 200
 
-'''
+
 @app.route('/transaction', methods=['POST'])
 def add_transaction():
     values = request.get_json()
+    print(values)
     required_fields = ['sender', 'receiver', 'amount']
     if not all(field in values for field in required_fields):
         return 'Brak wymaganych pól', 400
 
-    blockchain.add_transaction(values['sender'], values['receiver'], values['amount'])
+    # Dodajemy timestamp jeśli nie istnieje (czyli lokalna transakcja)
+    if 'timestamp' not in values:
+        values['timestamp'] = time.time()
+
+    added = blockchain.add_transaction(values['sender'], values['receiver'], values['amount'], values['timestamp'])
+
+    if not added:
+        return 'Transakcja już istnieje', 200
+
+    # Rozgłaszamy tylko NOWĄ transakcję
+    for node in blockchain.nodes:
+        print(node, blockchain.nodes)
+        if node != blockchain.node_address:
+            try:
+                requests.post(f"http://{node}/transaction", json=values)
+            except:
+                continue
+
     return f'Transakcja dodana do bloku', 201
-'''
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
