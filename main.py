@@ -19,6 +19,7 @@ class Blockchain:
         self.nodes = set()
         self.node_address = node_address
         self.known_transaction_hashes = set()
+        self.node_id = ""
         
         self.load_blockchain()
         if not self.chain:
@@ -49,7 +50,7 @@ class Blockchain:
             copy_list = copy.deepcopy(self.transactions)
             copy_list.append({
                 'sender': "*",
-                'receiver': self.node_address,
+                'receiver': self.node_id,
                 'amount': self.reward
             })
             block = {
@@ -282,6 +283,7 @@ def new_block():
     if previous_block["hash"] == block["previous_hash"]:
         # Jeśli blok jest poprawny, dodajemy go do łańcucha
         blockchain.chain.append(block)
+        blockchain.transactions = []
         blockchain.save_blockchain()
 
         # Po dodaniu nowego bloku, informujemy inne nody o tym, że blok został zaakceptowany
@@ -345,7 +347,7 @@ if __name__ == '__main__':
     flask_thread.start()
 
     while True:
-        print(f"\nWitaj node: {blockchain.node_address}")
+        print(f"\nWitaj node: {blockchain.node_id}")
         print("1. Wyślij transakcję")
         print("2. Sprawdź saldo")
         print("3. Rozpocznij kopanie")
@@ -362,11 +364,11 @@ if __name__ == '__main__':
             except ValueError:
                 print("❗ Nieprawidłowa kwota.")
                 continue
-            balance = blockchain.get_balance(blockchain.node_address)
+            balance = blockchain.get_balance(blockchain.node_id)
             if amount > balance:
                 print(f"❌ Brak środków. Twój balans: {balance}")
             else:
-                added = blockchain.add_transaction(blockchain.node_address, receiver, amount)
+                added = blockchain.add_transaction(blockchain.node_id, receiver, amount)
                 print("✅ Transakcja dodana")
 
                 # Rozgłaszamy tylko NOWĄ transakcję
@@ -379,7 +381,7 @@ if __name__ == '__main__':
                             continue
 
         elif choice == "2":
-            balance = blockchain.get_balance(blockchain.node_address)
+            balance = blockchain.get_balance(blockchain.node_id)
             print(f"💰 Twój balans: {balance} coins")
         elif choice == "3":
             print("⛏️  Kopanie bloku...")
