@@ -897,5 +897,81 @@
         "proof": 132,
         "previous_hash": "00e71b54074ab547c3e2ae9ccd11027ffe6390f8f323865f572e7e9f6369bc96",
         "hash": "0079fab9913b4411f5b8cafce51fa5a33b00e9e90dcb3e67f8528d52915a8515"
+    },
+    {
+        "index": 65,
+        "timestamp": 1744129434.2652757,
+        "transactions": [
+            {
+                "sender": "*",
+                "receiver": "test",
+                "amount": 50
+            }
+        ],
+        "proof": 611,
+        "previous_hash": "0079fab9913b4411f5b8cafce51fa5a33b00e9e90dcb3e67f8528d52915a8515",
+        "hash": "0095677f032f45c3d2b59394134b4b9efc7d345ebceae2932e82da9fc7adddd1"
+    },
+    {
+        "index": 66,
+        "timestamp": 1744129436.0881243,
+        "transactions": [
+            {
+                "sender": "*",
+                "receiver": "test",
+                "amount": 50
+            }
+        ],
+        "proof": 671,
+        "previous_hash": "0095677f032f45c3d2b59394134b4b9efc7d345ebceae2932e82da9fc7adddd1",
+        "hash": "005fc47c863bc8a6e8acbbbae9bbeca12b162917811b032df7a9157bfdb1a44e"
+    },
+    {
+        "index": 67,
+        "timestamp": 1744129442.6151145,
+        "transactions": [
+            {
+                "sender": "*",
+                "receiver": "key1",
+                "amount": 50
+            }
+        ],
+        "proof": 723,
+        "previous_hash": "005fc47c863bc8a6e8acbbbae9bbeca12b162917811b032df7a9157bfdb1a44e",
+        "hash": "0041ac4934bd56e4629717c73440bdb525cddce4c467f7733ffb997f9957a72e"
+    },
+    {
+        "index": 68,
+        "timestamp": 1744129446.860501,
+        "transactions": [
+            {
+                "sender": "*",
+                "receiver": "key2",
+                "amount": 50
+            }
+        ],
+        "proof": 417,
+        "previous_hash": "0041ac4934bd56e4629717c73440bdb525cddce4c467f7733ffb997f9957a72e",
+        "hash": "0053152ae04f2a4bedefdbf909686a2210be2dd836de229655ef00179b074c08"
+    },
+    {
+        "index": 69,
+        "timestamp": 1744129490.686638,
+        "transactions": [
+            {
+                "sender": "test",
+                "receiver": "key1",
+                "amount": 40.0,
+                "timestamp": 1744129467.2715468
+            },
+            {
+                "sender": "*",
+                "receiver": "key1",
+                "amount": 50
+            }
+        ],
+        "proof": 145,
+        "previous_hash": "0053152ae04f2a4bedefdbf909686a2210be2dd836de229655ef00179b074c08",
+        "hash": "005dbc61c764c49a681333744ff0cb5f9085316345e1acfd5b427e2cf6301c7f"
     }
 ]
