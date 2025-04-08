@@ -283,6 +283,7 @@ def new_block():
     if previous_block["hash"] == block["previous_hash"]:
         # Jeśli blok jest poprawny, dodajemy go do łańcucha
         blockchain.chain.append(block)
+        blockchain.transactions = []
         blockchain.save_blockchain()
 
         # Po dodaniu nowego bloku, informujemy inne nody o tym, że blok został zaakceptowany
