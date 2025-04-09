@@ -8,6 +8,9 @@ import requests
 import copy
 import threading
 
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.exceptions import InvalidSignature
 
 class Blockchain:
     def __init__(self, node_address):
@@ -95,7 +98,7 @@ class Blockchain:
         tx_copy = tx.copy()
         return hashlib.sha256(json.dumps(tx_copy, sort_keys=True).encode()).hexdigest()
 
-    def add_transaction(self, sender, receiver, amount, timestamp=None):
+    def add_transaction(self, sender, receiver, amount, signature, timestamp=None):
         if timestamp is None:
             timestamp = time.time()
 
@@ -106,6 +109,14 @@ class Blockchain:
             'timestamp': timestamp
         }
 
+        tx_data = json.dumps(tx, sort_keys=True)
+        
+        # Weryfikacja podpisu transakcji
+        if not self.verify_signature(sender, signature, tx_data):
+            print("❌ Nieprawidłowy podpis transakcji!")
+            return False
+
+        # Tworzenie hash transakcji
         tx_hash = self.transaction_hash(tx)
 
         if tx_hash in self.known_transaction_hashes:
@@ -114,6 +125,19 @@ class Blockchain:
         self.known_transaction_hashes.add(tx_hash)
         self.transactions.append(tx)
         return True
+    
+    def verify_signature(self, sender, signature, transaction_data):
+        try:
+            public_key = sender
+            public_key.verify(
+                signature,
+                transaction_data.encode(),
+                padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+                hashes.SHA256()
+            )
+            return True
+        except InvalidSignature:
+            return False
 
     def save_blockchain(self):
         with open("blockchain.json", "w") as file:
@@ -330,16 +354,55 @@ def add_transaction():
 node_id = "test"
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        port = int(sys.argv[1])  # Można podać port jako argument
+    
 
-        if len(sys.argv) > 2:
-            node_id = sys.argv[2]
+    # Załaduj nazwę bazową klucza z argv
+    key_name = "default_key"
+    if len(sys.argv) > 2:
+        key_name = sys.argv[2]
+        port = sys.argv[1]
 
+    priv_path = f"{key_name}_private.pem"
+    pub_path = f"{key_name}_public.pem"
+
+    # Sprawdź czy pliki istnieją — jeśli nie, generujemy nowe klucze
+    if not os.path.exists(priv_path) or not os.path.exists(pub_path):
+        print(f"🔐 Generuję nowe klucze dla: {key_name}")
+
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+
+        # Zapisz klucz prywatny
+        with open(priv_path, "wb") as f:
+            f.write(private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+
+        # Zapisz klucz publiczny
+        public_key = private_key.public_key()
+        with open(pub_path, "wb") as f:
+            f.write(public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ))
+
+    else:
+        # Załaduj istniejące klucze
+        with open(priv_path, "rb") as f:
+            private_key = serialization.load_pem_private_key(f.read(), password=None)
+
+        with open(pub_path, "rb") as f:
+            public_key = serialization.load_pem_public_key(f.read())
+
+    print(f"🔑 Załadowano klucze: {key_name}")
 
 
     blockchain = Blockchain(f"127.0.0.1:{port}")
-    blockchain.node_id = node_id  # zapisz identyfikator w obiekcie
+    blockchain.node_id = public_key  # zapisz identyfikator w obiekcie
 
     # 🔁 Uruchom Flask w osobnym wątku
     flask_thread = threading.Thread(target=lambda: app.run(host='127.0.0.1', port=port))
@@ -368,7 +431,17 @@ if __name__ == '__main__':
             if amount > balance:
                 print(f"❌ Brak środków. Twój balans: {balance}")
             else:
-                added = blockchain.add_transaction(blockchain.node_id, receiver, amount)
+                
+                timestamp = time.time()
+                transaction_data = {"sender": blockchain.node_id, "receiver": receiver, "amount": amount, "timestamp": timestamp}
+
+                signature = private_key.sign(
+                    transaction_data.encode(),
+                    padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+                    hashes.SHA256()
+                )
+
+                added = blockchain.add_transaction(blockchain.node_id, receiver, amount, signature, timestamp)
                 print("✅ Transakcja dodana")
 
                 # Rozgłaszamy tylko NOWĄ transakcję
