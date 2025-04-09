@@ -12,24 +12,42 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.exceptions import InvalidSignature
 
+def load_public_key_from_pem(pem_string):
+    return serialization.load_pem_public_key(pem_string.encode('utf-8'))
+
+def get_node_id_from_public_key(public_key):
+    # Serializujemy klucz publiczny do bajtów
+    pub_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    # Hashujemy
+    pub_hash = hashlib.sha256(pub_bytes).hexdigest()
+    return pub_hash
+
 class Blockchain:
-    def __init__(self, node_address):
+    def __init__(self, node_address, node_id, public_key, public_key_pem):
         self.chain = []
         self.transactions = []
         self.reward = 50
         self.difficulty = 2
         self.mining_in_progress = False
-        self.nodes = set()
+        self.nodes = {}
         self.node_address = node_address
         self.known_transaction_hashes = set()
-        self.node_id = ""
+        self.node_id = node_id
+        self.public_key = public_key
+        self.public_key_pem = public_key_pem
         
         self.load_blockchain()
         if not self.chain:
             genesis_block = self.proof_of_work()
             self.create_block(genesis_block)
 
-        self.nodes.add(self.node_address)
+        self.nodes[node_id] = {
+            "ip": self.node_address,
+            "public_key": public_key_pem
+        }
         
         if node_address != "127.0.0.1:5000":
             self.register_with_main_node()
@@ -51,11 +69,27 @@ class Blockchain:
         
         while True:
             copy_list = copy.deepcopy(self.transactions)
-            copy_list.append({
+            
+            transaction_data = {
                 'sender': "*",
                 'receiver': self.node_id,
-                'amount': self.reward
-            })
+                'amount': self.reward,
+                'timestamp': time.time()
+            }
+            copy_list.append(transaction_data)
+
+            transaction_data = json.dumps(transaction_data, sort_keys=True)
+
+            signature = private_key.sign(
+                transaction_data.encode(),
+                padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+                hashes.SHA256()
+            )
+
+            signature = bytes.fromhex(signature)
+
+            transaction_data["signature"] = signature
+            
             block = {
                 'index': previous_block['index'] + 1,
                 'timestamp': time.time(),
@@ -119,6 +153,8 @@ class Blockchain:
         # Tworzenie hash transakcji
         tx_hash = self.transaction_hash(tx)
 
+        tx["signature"] = signature
+
         if tx_hash in self.known_transaction_hashes:
             return False  # Już dodana
 
@@ -128,7 +164,7 @@ class Blockchain:
     
     def verify_signature(self, sender, signature, transaction_data):
         try:
-            public_key = sender
+            public_key = load_public_key_from_pem(self.nodes[sender]["public_key"])
             public_key.verify(
                 signature,
                 transaction_data.encode(),
@@ -152,11 +188,11 @@ class Blockchain:
         longest_chain = None
         max_length = len(self.chain)
 
-        for node in self.nodes:
-            if node == self.node_address:
+        for node_id, info in self.nodes.items():
+            if info["ip"] == self.node_address:
                 continue
             try:
-                response = requests.get(f"http://{node}/chain")
+                response = requests.get(f"http://{info['ip']}/chain")
                 if response.status_code == 200:
                     length = response.json()["length"]
                     chain = response.json()["chain"]
@@ -164,8 +200,8 @@ class Blockchain:
                         max_length = length
                         longest_chain = chain
             except:
-                continue  # Węzeł może być offline, ignorujemy błędy
-        
+                continue
+            
         if longest_chain:
             self.chain = longest_chain
             self.save_blockchain()
@@ -173,44 +209,51 @@ class Blockchain:
         return False
 
     def announce_updated_chain(self):
-        for node in self.nodes:
-            if node == self.node_address:
+        for node_id, info in self.nodes.items():
+            if info["ip"] == self.node_address:
                 continue
             try:
-                requests.get(f"http://{node}/sync")
+                requests.get(f"http://{info['ip']}/sync")
             except:
-                continue 
+                continue
 
     def announce_new_block(self, block):
-        for node in self.nodes:
-            if node == self.node_address:
+        for node_id, info in self.nodes.items():
+            if info["ip"] == self.node_address:
                 continue
             try:
-                requests.post(f"http://{node}/new_block", json=block)
+                requests.post(f"http://{info['ip']}/new_block", json=block)
             except:
                 continue  # Ignorujemy błędy
 
     def announce_new_node(self, new_nodes):
-        for node in self.nodes:
-            for new_node in new_nodes:
-                if node == self.node_address:
-                    continue
-                try:
-                    requests.post(f"http://{node}/register_node", json={"nodes": [new_node]})
-                    
-                except:
-                    continue
+        for node_id, info in self.nodes.items():
+            if info["ip"] == self.node_address:
+                continue
+            try:
+                requests.post(
+                    f"http://{info['ip']}/register_node",
+                    json={"nodes": new_nodes}
+                )
+            except:
+                continue
 
     def register_with_main_node(self):
         try:
-            response = requests.post(f"http://127.0.0.1:5000/register_node", json={"nodes": [self.node_address]})
-            print("try?")
+            my_node_data = {
+                self.node_id: {
+                    "ip": self.node_address,
+                    "public_key": self.public_key_pem  # <- TERAZ TO JEST STRING
+                }
+            }
+            response = requests.post("http://127.0.0.1:5000/register_node", json={"nodes": [my_node_data]})
             if response.status_code == 201:
-                nodes = response.json().get("all_nodes", [])
+                nodes = response.json().get("all_nodes", {})
                 self.nodes.update(nodes)
-                print(f"Zarejestrowano w sieci! Aktualne nody: {self.nodes}")
-        except:
-            print("Błąd rejestracji w bazowym nodzie.")
+                print(f"✅ Zarejestrowano w sieci. Aktualne nody: {list(self.nodes.keys())}")
+        except Exception as e:
+            print("❌ Błąd rejestracji w głównym nodzie:", e)
+
 
     def get_balance(self, node_id):
         balance = 0
@@ -254,25 +297,24 @@ def register_node():
     values = request.get_json()
     nodes = values.get("nodes")
 
-    if nodes is None or not isinstance(nodes, list):
+    if not nodes or not isinstance(nodes, list):
         return "No node to register", 400
 
-    # Śledzimy, czy dodano coś nowego
-    added_nodes = set()
+    added_nodes = {}
 
-    for node in nodes:
-        if node != blockchain.node_address and node not in blockchain.nodes:
-            blockchain.nodes.add(node)
-            added_nodes.add(node)
+    for entry in nodes:
+        for node_id, node_data in entry.items():
+            if node_id not in blockchain.nodes:
+                blockchain.nodes[node_id] = node_data
+                added_nodes[node_id] = node_data
 
-    # Ogłaszamy tylko NOWE nody
     if added_nodes:
-        blockchain.announce_new_node(added_nodes)
+        blockchain.announce_new_node([{nid: data} for nid, data in added_nodes.items()])
 
     return {
         "message": "Node(s) registered",
-        "added": list(added_nodes),
-        "all_nodes": list(blockchain.nodes)
+        "added": added_nodes,
+        "all_nodes": blockchain.nodes
     }, 201
 
 @app.route('/sync', methods=['GET'])
@@ -326,8 +368,7 @@ def get_nodes():
 @app.route('/transaction', methods=['POST'])
 def add_transaction():
     values = request.get_json()
-    print(values)
-    required_fields = ['sender', 'receiver', 'amount']
+    required_fields = ['sender', 'receiver', 'amount', 'signature']
     if not all(field in values for field in required_fields):
         return 'Brak wymaganych pól', 400
 
@@ -335,21 +376,24 @@ def add_transaction():
     if 'timestamp' not in values:
         values['timestamp'] = time.time()
 
-    added = blockchain.add_transaction(values['sender'], values['receiver'], values['amount'], values['timestamp'])
+    # Dekodowanie sygnatury (powinna być przesyłana jako string hex)
+    signature = bytes.fromhex(values['signature'])
+
+    added = blockchain.add_transaction(values['sender'], values['receiver'], values['amount'], signature, values['timestamp'])
 
     if not added:
         return 'Transakcja już istnieje', 200
 
     # Rozgłaszamy tylko NOWĄ transakcję
-    for node in blockchain.nodes:
-        print(node, blockchain.nodes)
-        if node != blockchain.node_address:
+    for node_id, node_data in blockchain.nodes.items():
+        if node_data["ip"] != blockchain.node_address:
             try:
-                requests.post(f"http://{node}/transaction", json=values)
+                requests.post(f"http://{node_data['ip']}/transaction", json=values)
             except:
                 continue
 
     return f'Transakcja dodana do bloku', 201
+
 
 node_id = "test"
 
@@ -397,12 +441,15 @@ if __name__ == '__main__':
 
         with open(pub_path, "rb") as f:
             public_key = serialization.load_pem_public_key(f.read())
+            public_key_pem = public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ).decode('utf-8')  # <-- zamieniamy na string
 
     print(f"🔑 Załadowano klucze: {key_name}")
 
 
-    blockchain = Blockchain(f"127.0.0.1:{port}")
-    blockchain.node_id = public_key  # zapisz identyfikator w obiekcie
+    blockchain = Blockchain(f"127.0.0.1:{port}", get_node_id_from_public_key(public_key), public_key, public_key_pem)
 
     # 🔁 Uruchom Flask w osobnym wątku
     flask_thread = threading.Thread(target=lambda: app.run(host='127.0.0.1', port=port))
@@ -435,21 +482,27 @@ if __name__ == '__main__':
                 timestamp = time.time()
                 transaction_data = {"sender": blockchain.node_id, "receiver": receiver, "amount": amount, "timestamp": timestamp}
 
+                transaction_data = json.dumps(transaction_data, sort_keys=True)
+
                 signature = private_key.sign(
                     transaction_data.encode(),
                     padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
                     hashes.SHA256()
                 )
 
+                signature = bytes.fromhex(str(signature))
+
+                print(signature)
+
                 added = blockchain.add_transaction(blockchain.node_id, receiver, amount, signature, timestamp)
                 print("✅ Transakcja dodana")
 
                 # Rozgłaszamy tylko NOWĄ transakcję
-                for node in blockchain.nodes:
-                    print(node, blockchain.nodes)
-                    if node != blockchain.node_address:
+                for node_id, node_data in blockchain.nodes.items():
+                    if node_data["ip"] != blockchain.node_address:
+                        print(node_id, node_data)
                         try:
-                            requests.post(f"http://{node}/transaction", json=blockchain.transactions[-1])
+                            requests.post(f"http://{node_data["ip"]}/transaction", json=blockchain.transactions[-1])
                         except:
                             continue
 
@@ -467,8 +520,9 @@ if __name__ == '__main__':
                 print(json.dumps(block, indent=4))
         elif choice == "5":
             print("🌐 Lista nodów:")
-            for node in blockchain.nodes:
-                print(f" - {node}")
+            for node_id, info in blockchain.nodes.items():
+                print(f" - {node_id}")
+                print(f"{info["ip"]}")
         elif choice == "0":
             print("👋 Zamykanie node'a...")
             break
