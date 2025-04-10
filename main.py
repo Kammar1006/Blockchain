@@ -78,17 +78,17 @@ class Blockchain:
             }
             copy_list.append(transaction_data)
 
-            transaction_data = json.dumps(transaction_data, sort_keys=True)
+            tx = json.dumps(transaction_data, sort_keys=True)
 
             signature = private_key.sign(
-                transaction_data.encode(),
+                tx.encode(),
                 padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
                 hashes.SHA256()
             )
 
-            signature = bytes.fromhex(signature)
+            #signature = bytes.fromhex(signature)
 
-            transaction_data["signature"] = signature
+            transaction_data['signature'] = signature.hex()
             
             block = {
                 'index': previous_block['index'] + 1,
@@ -146,7 +146,7 @@ class Blockchain:
         tx_data = json.dumps(tx, sort_keys=True)
         
         # Weryfikacja podpisu transakcji
-        if not self.verify_signature(sender, signature, tx_data):
+        if not self.verify_signature(sender, bytes.fromhex(str(signature)), tx_data):
             print("❌ Nieprawidłowy podpis transakcji!")
             return False
 
@@ -376,10 +376,7 @@ def add_transaction():
     if 'timestamp' not in values:
         values['timestamp'] = time.time()
 
-    # Dekodowanie sygnatury (powinna być przesyłana jako string hex)
-    signature = bytes.fromhex(values['signature'])
-
-    added = blockchain.add_transaction(values['sender'], values['receiver'], values['amount'], signature, values['timestamp'])
+    added = blockchain.add_transaction(values['sender'], values['receiver'], values['amount'], values['signature'], values['timestamp'])
 
     if not added:
         return 'Transakcja już istnieje', 200
@@ -490,7 +487,7 @@ if __name__ == '__main__':
                     hashes.SHA256()
                 )
 
-                signature = bytes.fromhex(str(signature))
+                signature = signature.hex()
 
                 print(signature)
 
