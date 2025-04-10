@@ -364,6 +364,11 @@ def get_nodes():
     """Zwraca listę podłączonych nodów"""
     return {"nodes": list(blockchain.nodes)}, 200
 
+@app.route('/balance', methods = ['GET'])
+def show_balance():
+    balance = blockchain.get_balance(blockchain.node_id)
+    return (f"💰 Twój balans: {balance} coins")
+
 
 @app.route('/transaction', methods=['POST'])
 def add_transaction():
