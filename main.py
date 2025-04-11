@@ -25,8 +25,18 @@ def get_node_id_from_public_key(public_key):
     pub_hash = hashlib.sha256(pub_bytes).hexdigest()
     return pub_hash
 
+def load_known_nodes(file_path="known_nodes.txt"):
+    if not os.path.exists(file_path):
+        print("📄 Plik z nodami nie istnieje. Używam domyślnego noda.")
+        return ["127.0.0.1:5000"]
+    
+    with open(file_path, "r") as f:
+        nodes = [line.strip() for line in f if line.strip()]
+    
+    return nodes or ["127.0.0.1:5000"]
+
 class Blockchain:
-    def __init__(self, node_address, node_id, public_key, public_key_pem):
+    def __init__(self, node_address, node_id, public_key, public_key_pem, known_nodes):
         self.chain = []
         self.transactions = []
         self.reward = 50
@@ -49,8 +59,7 @@ class Blockchain:
             "public_key": public_key_pem
         }
         
-        if node_address != "127.0.0.1:5000":
-            self.register_with_main_node()
+        self.register_with_known_nodes(known_nodes)
 
     
     def create_block(self, block):
@@ -238,21 +247,26 @@ class Blockchain:
             except:
                 continue
 
-    def register_with_main_node(self):
-        try:
-            my_node_data = {
-                self.node_id: {
-                    "ip": self.node_address,
-                    "public_key": self.public_key_pem  # <- TERAZ TO JEST STRING
-                }
+    def register_with_known_nodes(self, known_nodes):
+        my_node_data = {
+            self.node_id: {
+                "ip": self.node_address,
+                "public_key": self.public_key_pem
             }
-            response = requests.post("http://127.0.0.1:5000/register_node", json={"nodes": [my_node_data]})
-            if response.status_code == 201:
-                nodes = response.json().get("all_nodes", {})
-                self.nodes.update(nodes)
-                print(f"✅ Zarejestrowano w sieci. Aktualne nody: {list(self.nodes.keys())}")
-        except Exception as e:
-            print("❌ Błąd rejestracji w głównym nodzie:", e)
+        }
+
+        for node in known_nodes:
+            if node == self.node_address:
+                continue  # Nie rejestrujemy się u siebie
+
+            try:
+                response = requests.post(f"http://{node}/register_node", json={"nodes": [my_node_data]})
+                if response.status_code == 201:
+                    nodes = response.json().get("all_nodes", {})
+                    self.nodes.update(nodes)
+                    print(f"✅ Zarejestrowano w: {node}. Zaktualizowane nody: {list(self.nodes.keys())}")
+            except Exception as e:
+                print(f"❌ Nie udało się zarejestrować w {node}: {e}")
 
 
     def get_balance(self, node_id):
@@ -264,6 +278,15 @@ class Blockchain:
                 elif tx["sender"] == node_id:
                     balance -= tx["amount"]
         return balance
+
+    def save_known_nodes(self, file_path="known_nodes.txt"):
+        try:
+            with open(file_path, "w") as f:
+                for node_id, node_info in self.nodes.items():
+                    f.write(f"{node_info['ip']}\n")
+            print("💾 Zapisano znane nody do pliku.")
+        except Exception as e:
+            print("❌ Błąd zapisu nodów do pliku:", e)
 
 app = Flask(__name__)
 
@@ -451,7 +474,7 @@ if __name__ == '__main__':
     print(f"🔑 Załadowano klucze: {key_name}")
 
 
-    blockchain = Blockchain(f"127.0.0.1:{port}", get_node_id_from_public_key(public_key), public_key, public_key_pem)
+    blockchain = Blockchain(f"127.0.0.1:{port}", get_node_id_from_public_key(public_key), public_key, public_key_pem, load_known_nodes())
 
     # 🔁 Uruchom Flask w osobnym wątku
     flask_thread = threading.Thread(target=lambda: app.run(host='127.0.0.1', port=port))
@@ -534,3 +557,4 @@ if __name__ == '__main__':
 
 
 atexit.register(blockchain.save_blockchain)
+atexit.register(blockchain.save_known_nodes)
