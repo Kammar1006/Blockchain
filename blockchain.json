@@ -2050,5 +2050,21 @@
         "proof": 241,
         "previous_hash": "00bb6cd3895b87b06f9fa1e8202191cd14a795bdfd348a4392b5cf74fa56f028",
         "hash": "002da3a038acc5641ab5f73a0930449df6ade9a68d196a3ce10d0b75fdd74b8d"
+    },
+    {
+        "index": 133,
+        "timestamp": 1744401566.4349217,
+        "transactions": [
+            {
+                "sender": "*",
+                "receiver": "cfd58b0effdb2f07c2116bdc6e32cb8125d2c6f809cdf98fc03a048b8f8f73dd",
+                "amount": 50,
+                "timestamp": 1744401566.4329271,
+                "signature": "6a470cfc435ddd789bcc2c91b5069779ddc7e5f5daf741adaf6dc7dd43ca920a6b1de24b8c1de76598d9356f2275e390b3ea6a76926aaf670e6a0429ce5d047fb3a965c4ac76d479e25fa23f5ae454519bfcd54ea5257993657f0e13ed280bad404ed9aa06effb545b6ae9ce9a30755cda18d93e06a6e4053a9db99408218b599388671045e4c41848169bc010f5c1ad4570c49c8dc3cd0a759d129566af74a48935093c10161477ec039832af9b69663309c1469a34b7922635f828c1615eb7e64ada363ef69c0c3389a2af63f8237bec7a29370352758d84e8274f892c9cdfe89ec2166dd265bb769204d82999c78a3c9b66cd65c3b38398d6ec2fa1ef84a6"
+            }
+        ],
+        "proof": 256,
+        "previous_hash": "002da3a038acc5641ab5f73a0930449df6ade9a68d196a3ce10d0b75fdd74b8d",
+        "hash": "00d569d83762ed8a235731dfeeb7eb9a57a5c1493f4c340a38d7b2cf64919c5f"
     }
 ]

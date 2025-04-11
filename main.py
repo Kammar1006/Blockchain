@@ -248,20 +248,25 @@ class Blockchain:
                 continue
 
     def register_with_known_nodes(self, known_nodes):
-        try:
-            my_node_data = {
-                self.node_id: {
-                    "ip": self.node_address,
-                    "public_key": self.public_key_pem  # <- TERAZ TO JEST STRING
-                }
+        my_node_data = {
+            self.node_id: {
+                "ip": self.node_address,
+                "public_key": self.public_key_pem
             }
-            response = requests.post("http://127.0.0.1:5000/register_node", json={"nodes": [my_node_data]})
-            if response.status_code == 201:
-                nodes = response.json().get("all_nodes", {})
-                self.nodes.update(nodes)
-                print(f"✅ Zarejestrowano w sieci. Aktualne nody: {list(self.nodes.keys())}")
-        except Exception as e:
-            print("❌ Błąd rejestracji w głównym nodzie:", e)
+        }
+
+        for node in known_nodes:
+            if node == self.node_address:
+                continue  # Nie rejestrujemy się u siebie
+
+            try:
+                response = requests.post(f"http://{node}/register_node", json={"nodes": [my_node_data]})
+                if response.status_code == 201:
+                    nodes = response.json().get("all_nodes", {})
+                    self.nodes.update(nodes)
+                    print(f"✅ Zarejestrowano w: {node}. Zaktualizowane nody: {list(self.nodes.keys())}")
+            except Exception as e:
+                print(f"❌ Nie udało się zarejestrować w {node}: {e}")
 
 
     def get_balance(self, node_id):
@@ -419,8 +424,6 @@ if __name__ == '__main__':
 
     priv_path = f"{key_name}_private.pem"
     pub_path = f"{key_name}_public.pem"
-
-    print(load_known_nodes())
 
     # Sprawdź czy pliki istnieją — jeśli nie, generujemy nowe klucze
     if not os.path.exists(priv_path) or not os.path.exists(pub_path):
