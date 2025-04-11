@@ -25,8 +25,18 @@ def get_node_id_from_public_key(public_key):
     pub_hash = hashlib.sha256(pub_bytes).hexdigest()
     return pub_hash
 
+def load_known_nodes(file_path="known_nodes.txt"):
+    if not os.path.exists(file_path):
+        print("📄 Plik z nodami nie istnieje. Używam domyślnego noda.")
+        return ["127.0.0.1:5000"]
+    
+    with open(file_path, "r") as f:
+        nodes = [line.strip() for line in f if line.strip()]
+    
+    return nodes or ["127.0.0.1:5000"]
+
 class Blockchain:
-    def __init__(self, node_address, node_id, public_key, public_key_pem):
+    def __init__(self, node_address, node_id, public_key, public_key_pem, known_nodes):
         self.chain = []
         self.transactions = []
         self.reward = 50
@@ -49,8 +59,7 @@ class Blockchain:
             "public_key": public_key_pem
         }
         
-        if node_address != "127.0.0.1:5000":
-            self.register_with_main_node()
+        self.register_with_known_nodes(known_nodes)
 
     
     def create_block(self, block):
@@ -238,7 +247,7 @@ class Blockchain:
             except:
                 continue
 
-    def register_with_main_node(self):
+    def register_with_known_nodes(self, known_nodes):
         try:
             my_node_data = {
                 self.node_id: {
@@ -411,6 +420,8 @@ if __name__ == '__main__':
     priv_path = f"{key_name}_private.pem"
     pub_path = f"{key_name}_public.pem"
 
+    print(load_known_nodes())
+
     # Sprawdź czy pliki istnieją — jeśli nie, generujemy nowe klucze
     if not os.path.exists(priv_path) or not os.path.exists(pub_path):
         print(f"🔐 Generuję nowe klucze dla: {key_name}")
@@ -451,7 +462,7 @@ if __name__ == '__main__':
     print(f"🔑 Załadowano klucze: {key_name}")
 
 
-    blockchain = Blockchain(f"127.0.0.1:{port}", get_node_id_from_public_key(public_key), public_key, public_key_pem)
+    blockchain = Blockchain(f"127.0.0.1:{port}", get_node_id_from_public_key(public_key), public_key, public_key_pem, load_known_nodes())
 
     # 🔁 Uruchom Flask w osobnym wątku
     flask_thread = threading.Thread(target=lambda: app.run(host='127.0.0.1', port=port))
