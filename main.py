@@ -279,6 +279,15 @@ class Blockchain:
                     balance -= tx["amount"]
         return balance
 
+    def save_known_nodes(self, file_path="known_nodes.txt"):
+        try:
+            with open(file_path, "w") as f:
+                for node_id, node_info in self.nodes.items():
+                    f.write(f"{node_info['ip']}\n")
+            print("💾 Zapisano znane nody do pliku.")
+        except Exception as e:
+            print("❌ Błąd zapisu nodów do pliku:", e)
+
 app = Flask(__name__)
 
 @app.route('/mine', methods=['GET'])
@@ -548,3 +557,4 @@ if __name__ == '__main__':
 
 
 atexit.register(blockchain.save_blockchain)
+atexit.register(blockchain.save_known_nodes)
