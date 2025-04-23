@@ -2066,5 +2066,24 @@
         "proof": 256,
         "previous_hash": "002da3a038acc5641ab5f73a0930449df6ade9a68d196a3ce10d0b75fdd74b8d",
         "hash": "00d569d83762ed8a235731dfeeb7eb9a57a5c1493f4c340a38d7b2cf64919c5f"
+    },
+    {
+        "index": 134,
+        "timestamp": 1745395185.9592028,
+        "transactions": [
+            {
+                "sender": "Alice",
+                "receiver": "Bob",
+                "amount": 10
+            },
+            {
+                "sender": "Alice",
+                "receiver": "Charlie",
+                "amount": 10
+            }
+        ],
+        "nonce": 398,
+        "previous_hash": "00d569d83762ed8a235731dfeeb7eb9a57a5c1493f4c340a38d7b2cf64919c5f",
+        "hash": "00adaa0fbf7e05522fb50e48b86db6d7908c854ef42f372dcdbf4cd557cae16d"
     }
 ]
