@@ -158,6 +158,10 @@ class Blockchain:
         if not self.verify_signature(sender, bytes.fromhex(str(signature)), tx_data):
             print("❌ Nieprawidłowy podpis transakcji!")
             return False
+        
+        if sender != "*" and self.get_temp_balance(sender) < amount:
+            print(f"❌ Brak środków. Tymczasowy balans: {self.get_temp_balance(sender)} | Kwota: {amount}")
+            return False
 
         # Tworzenie hash transakcji
         tx_hash = self.transaction_hash(tx)
@@ -279,6 +283,17 @@ class Blockchain:
                     balance -= tx["amount"]
         return balance
 
+    def get_temp_balance(self, node_id):
+        balance = self.get_balance(node_id)
+
+        for tx in self.transactions:
+            if tx["receiver"] == node_id:
+                balance += tx["amount"]
+            elif tx["sender"] == node_id:
+                balance -= tx["amount"]
+
+        return balance
+
     def save_known_nodes(self, file_path="known_nodes.txt"):
         try:
             with open(file_path, "w") as f:
@@ -354,14 +369,11 @@ def new_block():
         return "Invalid data", 400
 
     block = values
-    #print(block["previous_hash"])
     previous_block = blockchain.get_previous_block()
-    #print(previous_block["hash"])
 
-    # Sprawdzamy, czy blok ma prawidłowy poprzedni hash
-
+    # Kopia bloku bez pola hash do ponownego przeliczenia
     block_copy = block.copy()
-    block_copy.pop("hash", None)  # Usuwamy hash przed obliczeniem
+    block_copy.pop("hash", None)
 
     if block['hash'] != blockchain.hash(block_copy):
         return {"message": "Hash nieprawidłowy"}, 400
@@ -369,18 +381,56 @@ def new_block():
     if block['hash'][:blockchain.difficulty] != '0' * blockchain.difficulty:
         return {"message": "Blok nie spełnia trudności"}, 400
 
-    if previous_block["hash"] == block["previous_hash"]:
-        # Jeśli blok jest poprawny, dodajemy go do łańcucha
-        blockchain.chain.append(block)
-        blockchain.transactions = []
-        blockchain.save_blockchain()
-
-        # Po dodaniu nowego bloku, informujemy inne nody o tym, że blok został zaakceptowany
-        # blockchain.announce_new_block(block)
-
-        return {"message": "Block accepted"}, 201
-    else:
+    if previous_block["hash"] != block["previous_hash"]:
         return {"message": "Block refused"}, 400
+
+    # 🛡️ WALIDACJA TRANSAKCJI W BLOKU
+    temp_balances = {}
+    for tx in block['transactions']:
+        sender = tx.get('sender')
+        receiver = tx.get('receiver')
+        amount = tx.get('amount')
+        signature = tx.get('signature')
+        timestamp = tx.get('timestamp')
+
+        if not all([sender, receiver, amount, signature, timestamp]):
+            return {"message": "Transakcja zawiera niekompletne dane"}, 400
+
+        if sender == "*":
+            continue  # pomiń reward
+
+        # Tworzymy surowe dane transakcji bez podpisu
+        tx_data = json.dumps({
+            'sender': sender,
+            'receiver': receiver,
+            'amount': amount,
+            'timestamp': timestamp
+        }, sort_keys=True)
+
+        # ✅ Weryfikacja podpisu
+        if not blockchain.verify_signature(sender, bytes.fromhex(signature), tx_data):
+            return {"message": f"Nieprawidłowy podpis dla transakcji od {sender}"}, 400
+
+        # Oblicz tymczasowy balans na podstawie łańcucha
+        if sender not in temp_balances:
+            temp_balances[sender] = blockchain.get_balance(sender)
+        if receiver not in temp_balances:
+            temp_balances[receiver] = blockchain.get_balance(receiver)
+
+        # Sprawdzenie czy nadawca ma środki
+        if temp_balances[sender] < amount:
+            return {"message": f"Niewystarczające środki u {sender}"}, 400
+
+        # Zaktualizuj tymczasowe salda
+        temp_balances[sender] -= amount
+        temp_balances[receiver] += amount
+
+    # Jeśli wszystko OK, dodaj blok
+    blockchain.chain.append(block)
+    blockchain.transactions = []
+    blockchain.save_blockchain()
+
+    return {"message": "Block accepted"}, 201
 
 @app.route('/nodes', methods=['GET'])
 def get_nodes():
@@ -499,9 +549,10 @@ if __name__ == '__main__':
             except ValueError:
                 print("❗ Nieprawidłowa kwota.")
                 continue
-            balance = blockchain.get_balance(blockchain.node_id)
-            if amount > balance:
-                print(f"❌ Brak środków. Twój balans: {balance}")
+            #balance = blockchain.get_balance(blockchain.node_id)
+            temp_balance = blockchain.get_temp_balance(blockchain.node_id)
+            if amount > temp_balance:
+                print(f"❌ Brak środków. Twój balans (z nierozliczonymi transakcjami): {temp_balance}")
             else:
                 
                 timestamp = time.time()
@@ -533,7 +584,9 @@ if __name__ == '__main__':
 
         elif choice == "2":
             balance = blockchain.get_balance(blockchain.node_id)
+            temp_balance = blockchain.get_temp_balance(blockchain.node_id)
             print(f"💰 Twój balans: {balance} coins")
+            print(f"🧮 Tymczasowy balans (z nierozliczonymi transakcjami): {temp_balance}")
         elif choice == "3":
             print("⛏️  Kopanie bloku...")
             mined_block = blockchain.proof_of_work()
