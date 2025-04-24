@@ -279,6 +279,17 @@ class Blockchain:
                     balance -= tx["amount"]
         return balance
 
+    def get_temp_balance(self, node_id):
+        balance = self.get_balance(node_id)
+
+        for tx in self.transactions:
+            if tx["receiver"] == node_id:
+                balance += tx["amount"]
+            elif tx["sender"] == node_id:
+                balance -= tx["amount"]
+
+        return balance
+
     def save_known_nodes(self, file_path="known_nodes.txt"):
         try:
             with open(file_path, "w") as f:
@@ -499,9 +510,9 @@ if __name__ == '__main__':
             except ValueError:
                 print("❗ Nieprawidłowa kwota.")
                 continue
-            balance = blockchain.get_balance(blockchain.node_id)
-            if amount > balance:
-                print(f"❌ Brak środków. Twój balans: {balance}")
+            temp_balance = blockchain.get_temp_balance(blockchain.node_id)
+            if amount > temp_balance:
+                print(f"❌ Brak środków. Twój balans (z nierozliczonymi transakcjami): {temp_balance}")
             else:
                 
                 timestamp = time.time()
@@ -533,7 +544,9 @@ if __name__ == '__main__':
 
         elif choice == "2":
             balance = blockchain.get_balance(blockchain.node_id)
+            temp_balance = blockchain.get_temp_balance(blockchain.node_id)
             print(f"💰 Twój balans: {balance} coins")
+            print(f"🧮 Tymczasowy balans (z nierozliczonymi transakcjami): {temp_balance}")
         elif choice == "3":
             print("⛏️  Kopanie bloku...")
             mined_block = blockchain.proof_of_work()
