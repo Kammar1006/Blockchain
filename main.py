@@ -158,6 +158,10 @@ class Blockchain:
         if not self.verify_signature(sender, bytes.fromhex(str(signature)), tx_data):
             print("❌ Nieprawidłowy podpis transakcji!")
             return False
+        
+        if sender != "*" and self.get_temp_balance(sender) < amount:
+            print(f"❌ Brak środków. Tymczasowy balans: {self.get_temp_balance(sender)} | Kwota: {amount}")
+            return False
 
         # Tworzenie hash transakcji
         tx_hash = self.transaction_hash(tx)
@@ -510,6 +514,7 @@ if __name__ == '__main__':
             except ValueError:
                 print("❗ Nieprawidłowa kwota.")
                 continue
+            #balance = blockchain.get_balance(blockchain.node_id)
             temp_balance = blockchain.get_temp_balance(blockchain.node_id)
             if amount > temp_balance:
                 print(f"❌ Brak środków. Twój balans (z nierozliczonymi transakcjami): {temp_balance}")
