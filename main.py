@@ -338,20 +338,66 @@ def register_node():
     if not nodes or not isinstance(nodes, list):
         return "No node to register", 400
 
-    added_nodes = {}
+    challenges = {}
 
     for entry in nodes:
         for node_id, node_data in entry.items():
-            if node_id not in blockchain.nodes:
-                blockchain.nodes[node_id] = node_data
-                added_nodes[node_id] = node_data
+            if node_id in blockchain.nodes:
+                continue  # Już zarejestrowany
 
-    if added_nodes:
-        blockchain.announce_new_node([{nid: data} for nid, data in added_nodes.items()])
+            challenge = secrets.token_hex(16)
+            blockchain.pending_challenges[node_id] = {
+                "challenge": challenge,
+                "node_data": node_data
+            }
+
+            challenges[node_id] = challenge
 
     return {
-        "message": "Node(s) registered",
-        "added": added_nodes,
+        "message": "Challenge(s) issued",
+        "challenges": challenges
+    }, 200
+
+@app.route('/verify_node', methods=['POST'])
+def verify_node():
+    values = request.get_json()
+    node_id = values.get("node_id")
+    signature_hex = values.get("signature")
+
+    if not node_id or node_id not in blockchain.pending_challenges:
+        return "No challenge pending for this node_id", 400
+
+    challenge_data = blockchain.pending_challenges[node_id]
+    challenge = challenge_data["challenge"]
+    node_data = challenge_data["node_data"]
+    public_key_pem = node_data["public_key"]
+
+    # Weryfikacja podpisu
+    try:
+        public_key = serialization.load_pem_public_key(public_key_pem.encode())
+        signature = bytes.fromhex(signature_hex)
+
+        public_key.verify(
+            signature=signature,
+            data=challenge.encode(),
+            padding=padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            algorithm=hashes.SHA256()
+        )
+    except Exception as e:
+        return {"message": "Verification failed", "error": str(e)}, 400
+
+    # Jeśli weryfikacja się udała — dodajemy node
+    blockchain.nodes[node_id] = node_data
+    del blockchain.pending_challenges[node_id]
+
+    # Rozgłoszenie do innych node’ów
+    blockchain.announce_new_node([{node_id: node_data}])
+
+    return {
+        "message": "Node verified and registered",
         "all_nodes": blockchain.nodes
     }, 201
 
