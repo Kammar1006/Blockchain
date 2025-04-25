@@ -7,6 +7,7 @@ import atexit
 import requests
 import copy
 import threading
+import secrets
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -48,6 +49,7 @@ class Blockchain:
         self.node_id = node_id
         self.public_key = public_key
         self.public_key_pem = public_key_pem
+        self.pending_challenges = {}
         
         self.load_blockchain()
         if not self.chain:
@@ -264,13 +266,46 @@ class Blockchain:
                 continue  # Nie rejestrujemy się u siebie
 
             try:
+                # 1️⃣ POBIERANIE CHALLENGE
                 response = requests.post(f"http://{node}/register_node", json={"nodes": [my_node_data]})
-                if response.status_code == 201:
-                    nodes = response.json().get("all_nodes", {})
+                if response.status_code != 200:
+                    print(f"❌ Brak odpowiedzi challenge od {node}")
+                    continue
+
+                challenge_data = response.json().get("challenges", {})
+                challenge = challenge_data.get(self.node_id)
+
+                if not challenge:
+                    print(f"❌ Challenge dla {self.node_id} nie został zwrócony przez {node}")
+                    continue
+
+                # 2️⃣ PODPISYWANIE CHALLENGE
+                signature = private_key.sign(
+                    data=challenge.encode(),
+                    padding=padding.PSS(
+                        mgf=padding.MGF1(hashes.SHA256()),
+                        salt_length=padding.PSS.MAX_LENGTH
+                    ),
+                    algorithm=hashes.SHA256()
+                )
+                signature_hex = signature.hex()
+
+                # 3️⃣ WERYFIKACJA + REJESTRACJA
+                verify_payload = {
+                    "node_id": self.node_id,
+                    "signature": signature_hex
+                }
+                verify_response = requests.post(f"http://{node}/verify_node", json=verify_payload)
+
+                if verify_response.status_code == 201:
+                    nodes = verify_response.json().get("all_nodes", {})
                     self.nodes.update(nodes)
-                    print(f"✅ Zarejestrowano w: {node}. Zaktualizowane nody: {list(self.nodes.keys())}")
+                    print(f"✅ Zarejestrowano i zweryfikowano z: {node}. Nody: {list(self.nodes.keys())}")
+                else:
+                    print(f"❌ Weryfikacja nie powiodła się w {node}: {verify_response.text}")
+
             except Exception as e:
-                print(f"❌ Nie udało się zarejestrować w {node}: {e}")
+                print(f"❌ Błąd rejestracji z {node}: {e}")
 
 
     def get_balance(self, node_id):
