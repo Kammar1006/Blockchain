@@ -7,6 +7,7 @@ import atexit
 import requests
 import copy
 import threading
+import secrets
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -48,6 +49,7 @@ class Blockchain:
         self.node_id = node_id
         self.public_key = public_key
         self.public_key_pem = public_key_pem
+        self.pending_challenges = {}
         
         self.load_blockchain()
         if not self.chain:
@@ -264,13 +266,46 @@ class Blockchain:
                 continue  # Nie rejestrujemy się u siebie
 
             try:
+                # 1️⃣ POBIERANIE CHALLENGE
                 response = requests.post(f"http://{node}/register_node", json={"nodes": [my_node_data]})
-                if response.status_code == 201:
-                    nodes = response.json().get("all_nodes", {})
+                if response.status_code != 200:
+                    print(f"❌ Brak odpowiedzi challenge od {node}")
+                    continue
+
+                challenge_data = response.json().get("challenges", {})
+                challenge = challenge_data.get(self.node_id)
+
+                if not challenge:
+                    print(f"❌ Challenge dla {self.node_id} nie został zwrócony przez {node}")
+                    continue
+
+                # 2️⃣ PODPISYWANIE CHALLENGE
+                signature = private_key.sign(
+                    data=challenge.encode(),
+                    padding=padding.PSS(
+                        mgf=padding.MGF1(hashes.SHA256()),
+                        salt_length=padding.PSS.MAX_LENGTH
+                    ),
+                    algorithm=hashes.SHA256()
+                )
+                signature_hex = signature.hex()
+
+                # 3️⃣ WERYFIKACJA + REJESTRACJA
+                verify_payload = {
+                    "node_id": self.node_id,
+                    "signature": signature_hex
+                }
+                verify_response = requests.post(f"http://{node}/verify_node", json=verify_payload)
+
+                if verify_response.status_code == 201:
+                    nodes = verify_response.json().get("all_nodes", {})
                     self.nodes.update(nodes)
-                    print(f"✅ Zarejestrowano w: {node}. Zaktualizowane nody: {list(self.nodes.keys())}")
+                    print(f"✅ Zarejestrowano i zweryfikowano z: {node}. Nody: {list(self.nodes.keys())}")
+                else:
+                    print(f"❌ Weryfikacja nie powiodła się w {node}: {verify_response.text}")
+
             except Exception as e:
-                print(f"❌ Nie udało się zarejestrować w {node}: {e}")
+                print(f"❌ Błąd rejestracji z {node}: {e}")
 
 
     def get_balance(self, node_id):
@@ -338,20 +373,66 @@ def register_node():
     if not nodes or not isinstance(nodes, list):
         return "No node to register", 400
 
-    added_nodes = {}
+    challenges = {}
 
     for entry in nodes:
         for node_id, node_data in entry.items():
-            if node_id not in blockchain.nodes:
-                blockchain.nodes[node_id] = node_data
-                added_nodes[node_id] = node_data
+            if node_id in blockchain.nodes:
+                continue  # Już zarejestrowany
 
-    if added_nodes:
-        blockchain.announce_new_node([{nid: data} for nid, data in added_nodes.items()])
+            challenge = secrets.token_hex(16)
+            blockchain.pending_challenges[node_id] = {
+                "challenge": challenge,
+                "node_data": node_data
+            }
+
+            challenges[node_id] = challenge
 
     return {
-        "message": "Node(s) registered",
-        "added": added_nodes,
+        "message": "Challenge(s) issued",
+        "challenges": challenges
+    }, 200
+
+@app.route('/verify_node', methods=['POST'])
+def verify_node():
+    values = request.get_json()
+    node_id = values.get("node_id")
+    signature_hex = values.get("signature")
+
+    if not node_id or node_id not in blockchain.pending_challenges:
+        return "No challenge pending for this node_id", 400
+
+    challenge_data = blockchain.pending_challenges[node_id]
+    challenge = challenge_data["challenge"]
+    node_data = challenge_data["node_data"]
+    public_key_pem = node_data["public_key"]
+
+    # Weryfikacja podpisu
+    try:
+        public_key = serialization.load_pem_public_key(public_key_pem.encode())
+        signature = bytes.fromhex(signature_hex)
+
+        public_key.verify(
+            signature=signature,
+            data=challenge.encode(),
+            padding=padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            algorithm=hashes.SHA256()
+        )
+    except Exception as e:
+        return {"message": "Verification failed", "error": str(e)}, 400
+
+    # Jeśli weryfikacja się udała — dodajemy node
+    blockchain.nodes[node_id] = node_data
+    del blockchain.pending_challenges[node_id]
+
+    # Rozgłoszenie do innych node’ów
+    blockchain.announce_new_node([{node_id: node_data}])
+
+    return {
+        "message": "Node verified and registered",
         "all_nodes": blockchain.nodes
     }, 201
 
